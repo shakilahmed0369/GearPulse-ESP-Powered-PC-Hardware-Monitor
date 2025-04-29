@@ -33,23 +33,8 @@ bool lastTouchState = false;
 bool isPowerOn = true;
 
 // Display mode
-enum DisplayMode { CPU, MEMORY, NETWORK, DIVERGENCE, TOTAL_MODES };
+enum DisplayMode { CPU, MEMORY, NETWORK, TOTAL_MODES };
 DisplayMode currentMode = CPU;
-
-// Divergence meter states
-enum DivergenceState { 
-  ANIMATION,    // Running animation (15 seconds)
-  DISPLAY_VALUE // Displaying current value (60 seconds)
-};
-DivergenceState divergenceState = DISPLAY_VALUE;
-
-// Divergence meter animation
-unsigned long lastStateChangeTime = 0;
-const unsigned long ANIMATION_DURATION = 15000;   // 15 seconds animation
-const unsigned long DISPLAY_DURATION = 60000;     // 60 seconds (1 minute) display
-float currentDivergence = 1.048596;
-float targetDivergence = 1.048596;
-char divergenceBuffer[10]; // Buffer to store divergence value as string
 
 // System data structure
 struct SystemData {
@@ -94,13 +79,6 @@ void updateDisplay();
 void drawProgressBar(uint8_t percent);
 String formatNetSpeed(float bytesPerSec);
 bool parseJsonData(const char* jsonString);
-float generateRandomDivergenceValue();
-void displayDivergence(float value);
-void updateDivergenceAnimation();
-void formatDivergenceValue(float value, char* buffer);
-void updateDivergenceState();
-void startDivergenceAnimation();
-void addWorldLineInfo(float value);
 void processSerialData();
 
 void setup() {
@@ -130,13 +108,7 @@ void setup() {
   
   powerOn();
   
-  // Initial divergence value
-  targetDivergence = generateRandomDivergenceValue();
-  formatDivergenceValue(targetDivergence, divergenceBuffer);
-  currentDivergence = targetDivergence;
-  
   // Setup the initial timing
-  lastStateChangeTime = millis();
 }
 
 void loop() {
@@ -145,11 +117,6 @@ void loop() {
   if (isPowerOn) {
     // Process serial data
     processSerialData();
-    
-    // Handle divergence animation and display cycles
-    if (currentMode == DIVERGENCE) {
-      updateDivergenceState();
-    }
   }
 
   // Handle touch sensor
@@ -173,7 +140,6 @@ void loop() {
 
   lastTouchState = currentTouchState;
   
-  // Add a small delay to prevent CPU hogging
   delay(10);
 }
 
@@ -195,9 +161,7 @@ void processSerialData() {
       // Only try to parse if there's actual content
       if (serialBufferIndex > 2) {  // Minimum valid JSON is "{}"
         if (parseJsonData(serialBuffer)) {
-          if (currentMode != DIVERGENCE) {
-            updateDisplay();
-          }
+          updateDisplay();
         }
       }
       
@@ -205,61 +169,6 @@ void processSerialData() {
       serialBufferIndex = 0;
     }
   }
-}
-
-void updateDivergenceState() {
-  unsigned long currentTime = millis();
-  unsigned long elapsedTime = currentTime - lastStateChangeTime;
-    
-  switch (divergenceState) {
-    case ANIMATION:
-      // During animation, update animation frames
-      updateDivergenceAnimation();
-      
-      // Check if animation time is complete
-      if (elapsedTime >= ANIMATION_DURATION) {
-        // Animation complete, transition to display state
-        divergenceState = DISPLAY_VALUE;
-        lastStateChangeTime = currentTime;
-        
-        // Set the current divergence to target and display with world line info
-        currentDivergence = targetDivergence;
-        displayDivergence(currentDivergence);
-        addWorldLineInfo(currentDivergence);
-        
-        Serial.println(F("Divergence animation complete, displaying value"));
-      }
-      break;
-      
-    case DISPLAY_VALUE:
-      // Just display the current value and world line info
-      // Check if display time is complete
-      if (elapsedTime >= DISPLAY_DURATION) {
-        // Display time complete, start new animation cycle
-        startDivergenceAnimation();
-        divergenceState = ANIMATION;
-        lastStateChangeTime = currentTime;
-        
-        Serial.println(F("Starting new divergence animation cycle"));
-      }
-      break;
-  }
-}
-
-void startDivergenceAnimation() {
-  // Generate a new target divergence value
-  float newTarget = generateRandomDivergenceValue();
-  
-  // Make sure it's different from the current one
-  while (abs(newTarget - currentDivergence) < 0.000001) {
-    newTarget = generateRandomDivergenceValue();
-  }
-  
-  targetDivergence = newTarget;
-  formatDivergenceValue(targetDivergence, divergenceBuffer);
-  
-  Serial.print(F("New divergence target: "));
-  Serial.println(targetDivergence, 6);
 }
 
 // Update a single line of the display only if its content has changed
@@ -344,7 +253,6 @@ void powerOff() {
   // Clear system data
   memset(&sysData, 0, sizeof(sysData));
   currentMode = CPU;
-  divergenceState = DISPLAY_VALUE;  // Reset state for next power on
 
   showMessage(F("Powering Off..."));
   delay(1000);
@@ -355,25 +263,10 @@ void powerOff() {
 
 void changeDisplayMode() {
   currentMode = static_cast<DisplayMode>((currentMode + 1) % TOTAL_MODES);
-  
-  // When switching to divergence mode, reset the state and timers
-  if (currentMode == DIVERGENCE) {
-    divergenceState = DISPLAY_VALUE;
-    lastStateChangeTime = millis();
-    displayDivergence(currentDivergence);
-    addWorldLineInfo(currentDivergence);
-  } else {
-    updateDisplay();
-  }
+  updateDisplay();
 }
 
 void updateDisplay() {
-  if (currentMode == DIVERGENCE) {
-    displayDivergence(currentDivergence);
-    addWorldLineInfo(currentDivergence);
-    return;
-  }
-  
   // Create buffers for the new display content
   char newLine0[17] = {0}; // 16 characters + null terminator
   char newLine1[17] = {0};
@@ -397,7 +290,6 @@ void updateDisplay() {
                static_cast<int>(sysData.ramTotal),
                static_cast<int>(sysData.ramPercent));
       
-      // For the progress bar, we'll update the entire line
       strcpy(newLine1, "                "); // 16 spaces
       break;
 
@@ -418,23 +310,17 @@ void updateDisplay() {
       break;
   }
 
-  // Update only the parts of the display that have changed
   updateDisplayLine(0, newLine0);
   updateDisplayLine(1, newLine1);
   
-  // Special case for memory progress bar
   if (currentMode == MEMORY) {
     lcd.setCursor(0, 1);
     drawProgressBar(static_cast<uint8_t>(sysData.ramPercent));
-    
-    // Update the tracking buffer with the progress bar
     char progressBuffer[17] = "                ";
     strcpy(previousDisplayLines[1], progressBuffer);
   }
   
-  // Special case for network display
   if (currentMode == NETWORK) {
-    // Handle special characters in the display manually
     lcd.setCursor(0, 1);
     lcd.write(1); // down arrow
     lcd.setCursor(strlen(newLine1) - formatNetSpeed(sysData.netUpload).length() - 2, 1);
@@ -517,126 +403,4 @@ bool parseJsonData(const char* jsonString) {
   memcpy(&sysData, &tempData, sizeof(SystemData));
   
   return true;
-}
-
-// Format a float value to standard divergence notation string (x.xxxxxx)
-void formatDivergenceValue(float value, char* buffer) {
-  dtostrf(value, 1, 6, buffer);
-}
-
-// Generate a random Steins;Gate style divergence value
-float generateRandomDivergenceValue() {
-  // Common divergence values from Steins;Gate with higher probability:
-  // 0.000000% (Alpha Attractor Field)
-  // 0.571024% (Beta Attractor Field) 
-  // 1.048596% (Steins Gate world line)
-  // 1.130426% (Gamma Attractor Field)
-  
-  // Generate a random value with preference for canonical ones
-  int randomVal = random(100);
-  
-  if (randomVal < 25) {
-    return 1.048596; // Steins Gate
-  } else if (randomVal < 40) {
-    return 0.000000; // Alpha
-  } else if (randomVal < 55) {
-    return 0.571024; // Beta
-  } else if (randomVal < 70) {
-    return 1.130426; // Gamma
-  } else {
-    // Generate a random divergence value between 0 and 3
-    float randomDivergence = random(300000) / 100000.0;
-    return randomDivergence;
-  }
-}
-
-// Add world line information based on the divergence value
-void addWorldLineInfo(float value) {
-  char newLine0[17] = "                ";
-  
-  // Display the appropriate world line name - all strings should be 16 chars or less
-  if (abs(value - 1.048596) < 0.000001) {
-    strncpy(newLine0, "  STEINS;GATE   ", 16);
-  } else if (value < 0.500000) {
-    strncpy(newLine0, " ALPHA WORLDLINE", 16);
-  } else if (value < 1.000000) {
-    strncpy(newLine0, " BETA WORLDLINE ", 16);
-  } else if (value < 1.100000) {
-    strncpy(newLine0, "  STEINS GATE   ", 16);
-  } else if (value < 2.000000) {
-    strncpy(newLine0, " GAMMA WORLDLINE", 16);
-  } else if (value < 3.000000) {
-    strncpy(newLine0, " DELTA WORLDLINE", 16);
-  } else {
-    strncpy(newLine0, "UNKNOWN WORLDLIN", 16);
-  }
-  
-  // Ensure null termination
-  newLine0[16] = '\0';
-  
-  // Update only if different
-  updateDisplayLine(0, newLine0);
-}
-
-void displayDivergence(float value) {
-  char newLine0[17] = "   DIVERGENCE   ";
-  
-  // Format to standard divergence notation
-  char buffer[10];
-  formatDivergenceValue(value, buffer);
-  
-  // Center the value in the second line
-  char newLine1[17] = "                ";
-  int startPos = (16 - strlen(buffer)) / 2;
-  memcpy(newLine1 + startPos, buffer, strlen(buffer));
-  
-  // Update only if different
-  updateDisplayLine(0, newLine0);
-  updateDisplayLine(1, newLine1);
-}
-
-// This function creates a smooth animation effect for the divergence meter
-void updateDivergenceAnimation() {
-  static unsigned long lastAnimationUpdate = 0;
-  unsigned long currentTime = millis();
-  
-  // Update animation at appropriate intervals
-  if (currentTime - lastAnimationUpdate < 40) {
-    return;  // Don't update too frequently
-  }
-  lastAnimationUpdate = currentTime;
-  
-  // Set title 
-  char newLine0[17] = "   DIVERGENCE   ";
-  updateDisplayLine(0, newLine0);
-  
-  // Get the current displayed value as a string
-  char displayBuffer[10];
-  formatDivergenceValue(currentDivergence, displayBuffer);
-  
-  // Create animated display line
-  char newLine1[17] = "                ";
-  int startPos = 4;  // Starting position for centering
-  
-  // Calculate animation progress
-  unsigned long elapsed = currentTime - lastStateChangeTime;
-  float progress = static_cast<float>(elapsed) / ANIMATION_DURATION;
-  
-  // For smoother animation, slowly settle digits from left to right
-  for (int i = 0; i < strlen(displayBuffer); i++) {
-    if (displayBuffer[i] >= '0' && displayBuffer[i] <= '9') {
-      float digitProgress = progress * 2.0 - (0.15 * i);
-      
-      if (digitProgress > 0.9 || random(100) < (digitProgress * 100)) {
-        newLine1[startPos + i] = divergenceBuffer[i];
-      } else {
-        newLine1[startPos + i] = '0' + random(10);
-      }
-    } else {
-      newLine1[startPos + i] = displayBuffer[i];
-    }
-  }
-  
-  // Update only the bottom line for animation
-  updateDisplayLine(1, newLine1);
 }
