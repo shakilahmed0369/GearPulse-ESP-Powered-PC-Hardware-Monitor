@@ -33,8 +33,8 @@ GearPulse is an ESP8266-based hardware monitoring solution that displays real-ti
 | GND        | GND         | Ground |
 
 ## Connection Diagram
+![GearPulse diagram](https://github.com/user-attachments/assets/052c5227-acf6-439c-99cc-d37d3df02786)
 
-Diagram
 
 ## Software Requirements
 
