@@ -1,6 +1,8 @@
 # GearPulse - ESP Powered PC Hardware Monitor
 **Version 1.0.0** | **Author: Shakil Ahmed** | **License: MIT**
 
+![Beige Blue Minimalist Aesthetic Photo Collage Beach Desktop Wallpaper](https://github.com/user-attachments/assets/749d033a-b0ef-4ddd-a162-b2a8903294ea)
+
 ## Overview
 GearPulse is an ESP8266-based hardware monitoring solution that displays real-time PC system metrics (CPU, GPU, RAM, and network usage) on a 16x2 LCD display. The system receives JSON data via serial communication from a computer and presents the information in an easy-to-read format.
 
