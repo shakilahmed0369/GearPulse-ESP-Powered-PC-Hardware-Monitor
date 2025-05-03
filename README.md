@@ -11,8 +11,6 @@ GearPulse is an ESP8266-based hardware monitoring solution that displays real-ti
 - TTP223 capacitive touch sensor
 - Breadboard and jumper wires
 - USB cable for power and data connection
-- Optional: 3D printed enclosure
-
 ## Pin Diagram
 
 ### LCD Display Connections
