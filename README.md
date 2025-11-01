@@ -132,6 +132,7 @@ The device cycles through three display modes:
 | No data displayed | Serial communication issue | Verify baud rate (115200), check if monitoring software is running |
 | Display shows garbage characters | I2C address incorrect | Adjust the I2C address (default is 0x27, might be 0x3F for some displays) |
 | Touch sensor not responding | Wiring issue | Check touch sensor connections |
+| Firmware upload fails with serial port error (e.g., PermissionError 13) | Missing or incorrect CH340 driver | Install the CH340 driver from <mcurl name="this link" url="https://sparks.gogo.co.nz/ch340.html"></mcurl>
 
 ## Technical Details
 
